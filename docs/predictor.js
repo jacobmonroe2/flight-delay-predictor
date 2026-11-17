@@ -7,6 +7,7 @@
  */
 const Predictor = (() => {
   let META, MODEL;
+  const VERSION = 3;                             // cache-buster for meta.json and model.json
   const DOW = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
     'August', 'September', 'October', 'November', 'December'];
@@ -17,7 +18,7 @@ const Predictor = (() => {
 
   async function load(base = '') {
     [META, MODEL] = await Promise.all(
-      ['meta.json', 'model.json'].map(f => fetch(base + f).then(r => r.json())));
+      ['meta.json', 'model.json'].map(f => fetch(`${base}${f}?v=${VERSION}`).then(r => r.json())));
     MODEL.catIndex = {};
     for (const c of ['airline', 'origin', 'dest'])
       MODEL.catIndex[c] = new Map(META.categories[c].map((v, i) => [v, i]));

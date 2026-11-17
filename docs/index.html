@@ -313,7 +313,7 @@ select:focus, input:focus { box-shadow: 0 0 0 2px var(--yellow); }
 </main>
 
 <script src="vendor/leaflet.js"></script>
-<script src="predictor.js"></script>
+<script src="predictor.js?v=3"></script>   <!-- bump v here and in predictor.js when the model or data changes -->
 <script>
 const $ = id => document.getElementById(id);
 const PLANE = '<svg viewBox="0 0 24 24" fill="#ffd21f"><path d="M12 2c.7 0 1.2.8 1.2 2v5l8 5v2l-8-2.5V19l2.3 1.7V22L12 21l-3.5 1v-1.3L10.8 19v-5.5l-8 2.5v-2l8-5V4c0-1.2.5-2 1.2-2z"/></svg>';
@@ -470,12 +470,14 @@ function render(q, res) {
   $('c-banner').innerHTML = `<b>${res.band} risk</b><span>${Math.round(res.risk * 100)}% chance of a 15+ min delay</span>`;
 
   // What actually happened on this route in the data (history, not the model's prediction).
-  const late60 = res.route_late60, mid = Math.max(0, res.route_rate - late60), onTime = 1 - res.route_rate;
-  const parts = [['On time or under 15 min late', onTime, '--green'], ['15 to 60 min late', mid, '--yellow'], ['Over an hour late', late60, '--red']];
-  $('record').innerHTML = `<div class="seg" role="img" aria-label="${parts.map(p => `${p[0]} ${pct(p[1])}`).join(', ')}">${
-      parts.map(p => `<i style="flex:${p[1]};background:var(${p[2]})"></i>`).join('')}</div>
-    <div class="seg-key">${parts.map(p => `<i style="background:var(${p[2]})"></i><span>${p[0]}</span><b>${pct(p[1])}</b>`).join('')}</div>
-    <div class="record-note">${res.route_n.toLocaleString()} flights from ${q.origin} to ${q.dest} on all airlines, ${META.date_min.slice(0, 7)} to ${META.date_max.slice(0, 7)}. This is the historical record, not the prediction.</div>`;
+  if (res.route_late60 != null) {
+    const late60 = res.route_late60, mid = Math.max(0, res.route_rate - late60), onTime = 1 - res.route_rate;
+    const parts = [['On time or under 15 min late', onTime, '--green'], ['15 to 60 min late', mid, '--yellow'], ['Over an hour late', late60, '--red']];
+    $('record').innerHTML = `<div class="seg" role="img" aria-label="${parts.map(p => `${p[0]} ${pct(p[1])}`).join(', ')}">${
+        parts.map(p => `<i style="flex:${p[1]};background:var(${p[2]})"></i>`).join('')}</div>
+      <div class="seg-key">${parts.map(p => `<i style="background:var(${p[2]})"></i><span>${p[0]}</span><b>${pct(p[1])}</b>`).join('')}</div>
+      <div class="record-note">${res.route_n.toLocaleString()} flights from ${q.origin} to ${q.dest} on all airlines, ${META.date_min.slice(0, 7)} to ${META.date_max.slice(0, 7)}. This is the historical record, not the prediction.</div>`;
+  }
 
   const pos = Math.min(100, res.risk / .6 * 100), avg = res.base_rate / .6 * 100;
   const diff = (res.risk - res.base_rate) * 100;
