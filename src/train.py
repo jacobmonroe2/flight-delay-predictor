@@ -188,12 +188,15 @@ def main():
     dep_min = (df["crs_dep"] // 100) * 60 + df["crs_dep"] % 100
     arr_min = (df["crs_arr"] // 100) * 60 + df["crs_arr"] % 100
     df["clock_shift"] = (arr_min - dep_min) % 1440   # includes time-zone change
+    df["late60"] = df["arr_delay"] > 60              # more than an hour late
     rg = df.groupby("route").agg(distance=("distance", "median"),
                                  clock=("clock_shift", "median"),
-                                 rate=("delayed", "mean"), n=("delayed", "size"))
+                                 rate=("delayed", "mean"), late60=("late60", "mean"),
+                                 n=("delayed", "size"))
     ra = df.groupby("route")["airline"].agg(lambda s: sorted(s.astype(str).unique()))
     routes = {r: {"distance": int(v.distance), "shift": int(v.clock),
-                  "rate": round(float(v.rate), 4), "n": int(v.n), "airlines": ra[r]}
+                  "rate": round(float(v.rate), 4), "late60": round(float(v.late60), 4),
+                  "n": int(v.n), "airlines": ra[r]}
               for r, v in rg.iterrows()}
 
     cities = {}

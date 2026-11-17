@@ -160,6 +160,19 @@ select:focus, input:focus { box-shadow: 0 0 0 2px var(--yellow); }
 .model th { font-weight: 700; letter-spacing: .03em; }
 .model tr.us td { font-weight: 700; }
 
+/* ---------- status banner and arrival record ---------- */
+#card { padding-top: 0; overflow: hidden; }
+.banner { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 0 -16px 14px;
+  padding: 9px 16px; color: #000; font-size: 12px; font-weight: 600; }
+.banner b { font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.seg { display: flex; gap: 2px; height: 14px; border-radius: 7px; overflow: hidden; }
+.seg i { display: block; min-width: 3px; }
+.seg-key { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 6px 9px; margin-top: 12px; font-size: 13px; }
+.seg-key i { width: 10px; height: 10px; border-radius: 50%; }
+.seg-key span { color: var(--muted); }
+.seg-key b { font-weight: 700; }
+.record-note { margin-top: 10px; font-size: 12px; line-height: 1.45; color: var(--dim); }
+
 /* ---------- map ---------- */
 .leaflet-container { background: var(--bg); font-family: var(--mono); }
 .leaflet-control-attribution { display: none; }
@@ -195,6 +208,8 @@ select:focus, input:focus { box-shadow: 0 0 0 2px var(--yellow); }
   aside { width: 100%; flex: 1; min-height: 0; border-right: 0; padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
     overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   section { padding: 14px; }
+  .banner { margin: 0 -14px 12px; padding: 9px 14px; }
+  .seg-key { font-size: 14px; }
   select, input { height: 46px; font-size: 16px; }          /* 16px stops iOS zooming in on focus */
   input[type="date"], input[type="time"] { min-width: 0; -webkit-appearance: none; appearance: none; text-align: left; }
   label { font-size: 12px; }
@@ -247,6 +262,7 @@ select:focus, input:focus { box-shadow: 0 0 0 2px var(--yellow); }
     </section>
 
     <section id="card" hidden>
+      <div class="banner" id="c-banner"></div>
       <div class="card-top">
         <div class="apt"><div class="code" id="c-o"></div><div class="city" id="c-oc"></div><div class="time" id="c-ot"></div></div>
         <div class="track">
@@ -261,6 +277,11 @@ select:focus, input:focus { box-shadow: 0 0 0 2px var(--yellow); }
     <section>
       <h2>Delay risk</h2>
       <div id="risk-body"><div class="empty">Pick a flight to get a risk score.</div></div>
+    </section>
+
+    <section>
+      <h2>Arrival record on this route</h2>
+      <div id="record"><div class="empty">How flights on this route actually arrived.</div></div>
     </section>
 
     <section>
@@ -445,6 +466,16 @@ function render(q, res) {
   $('c-dist').textContent = res.distance.toLocaleString() + ' MI';
   const day = new Date(q.date + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   $('c-air').innerHTML = `<b>${res.airline_name}</b> · ${day}`;
+  $('c-banner').style.background = color;
+  $('c-banner').innerHTML = `<b>${res.band} risk</b><span>${Math.round(res.risk * 100)}% chance of a 15+ min delay</span>`;
+
+  // What actually happened on this route in the data (history, not the model's prediction).
+  const late60 = res.route_late60, mid = Math.max(0, res.route_rate - late60), onTime = 1 - res.route_rate;
+  const parts = [['On time or under 15 min late', onTime, '--green'], ['15 to 60 min late', mid, '--yellow'], ['Over an hour late', late60, '--red']];
+  $('record').innerHTML = `<div class="seg" role="img" aria-label="${parts.map(p => `${p[0]} ${pct(p[1])}`).join(', ')}">${
+      parts.map(p => `<i style="flex:${p[1]};background:var(${p[2]})"></i>`).join('')}</div>
+    <div class="seg-key">${parts.map(p => `<i style="background:var(${p[2]})"></i><span>${p[0]}</span><b>${pct(p[1])}</b>`).join('')}</div>
+    <div class="record-note">${res.route_n.toLocaleString()} flights from ${q.origin} to ${q.dest} on all airlines, ${META.date_min.slice(0, 7)} to ${META.date_max.slice(0, 7)}. This is the historical record, not the prediction.</div>`;
 
   const pos = Math.min(100, res.risk / .6 * 100), avg = res.base_rate / .6 * 100;
   const diff = (res.risk - res.base_rate) * 100;

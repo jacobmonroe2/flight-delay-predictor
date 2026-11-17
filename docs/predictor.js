@@ -196,7 +196,7 @@ const Predictor = (() => {
       factors: explain(q, feat, shap(feat.x), p, minutes),
       hourly,
       arrival: String(Math.floor(feat.arr / 60)).padStart(2, '0') + ':' + String(feat.arr % 60).padStart(2, '0'),
-      distance: route.distance, route_rate: route.rate,
+      distance: route.distance, route_rate: route.rate, route_late60: route.late60, route_n: route.n,
       airline_flies_route: route.airlines.includes(q.airline),
       airline_name: META.airlines[q.airline].name,
     };

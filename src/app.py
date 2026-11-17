@@ -167,6 +167,8 @@ def predict():
         "arrival": f"{arr // 60:02d}:{arr % 60:02d}",
         "distance": route["distance"],
         "route_rate": route["rate"],
+        "route_late60": route["late60"],
+        "route_n": route["n"],
         "airline_flies_route": airline in route["airlines"],
         "airline_name": META["airlines"][airline]["name"],
     })
