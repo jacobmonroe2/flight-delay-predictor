@@ -343,8 +343,12 @@ function initForm() {
     .map(c => `<option value="${c}">${c} · ${META.airports[c].city}</option>`).join('');
   const t = new Date(Date.now() + 864e5);
   $('date').value = new Date(t - t.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
-  $('origin').value = META.airports.ORD ? 'ORD' : codes[0];
-  fillDests('LGA'); fillAirlines('UA');
+  // A link can preset the flight: ?from=FLL&to=EWR&airline=B6&date=2026-12-23&time=19:15
+  const qs = new URLSearchParams(location.search), has = (id, v) => v && [...$(id).options].some(o => o.value === v);
+  $('origin').value = has('origin', qs.get('from')) ? qs.get('from') : META.airports.ORD ? 'ORD' : codes[0];
+  fillDests(qs.get('to') || 'LGA'); fillAirlines(qs.get('airline') || 'UA');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(qs.get('date') || '')) $('date').value = qs.get('date');
+  if (/^\d{2}:\d{2}$/.test(qs.get('time') || '')) $('time').value = qs.get('time');
   $('origin').onchange = () => { fillDests($('dest').value); fillAirlines($('airline').value); predict(); };
   $('dest').onchange = () => { fillAirlines($('airline').value); predict(); };
   for (const id of ['airline', 'date', 'time']) $(id).onchange = predict;
