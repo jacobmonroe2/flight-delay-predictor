@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
 <title>DelayRadar</title>
 <link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -185,11 +186,38 @@ select:focus, input:focus { box-shadow: 0 0 0 2px var(--yellow); }
 .mapwrap { position: relative; flex: 1; display: flex; min-width: 0; }
 
 @media (max-width: 820px) {
-  body { overflow: auto; }
-  main { flex-direction: column-reverse; }
-  aside { width: 100%; border-right: 0; overflow: visible; }
-  .mapwrap { flex: none; height: 44vh; }
+  /* Phone: map on top, the panel scrolls underneath like a sheet. */
+  body { height: 100dvh; }
+  header { height: calc(44px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 14px 0; }
   .status { display: none; }
+  main { flex-direction: column-reverse; }
+  .mapwrap { flex: none; height: 36dvh; }
+  aside { width: 100%; flex: 1; min-height: 0; border-right: 0; padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  section { padding: 14px; }
+  select, input { height: 46px; font-size: 16px; }          /* 16px stops iOS zooming in on focus */
+  input[type="date"], input[type="time"] { min-width: 0; -webkit-appearance: none; appearance: none; text-align: left; }
+  label { font-size: 12px; }
+  .hint { font-size: 13px; }
+  .apt .code { font-size: 32px; }
+  .apt .city { max-width: 34vw; }
+  .risk .num { font-size: 60px; }
+  .compare, .best, .carrier { font-size: 14px; }
+  .factor { padding: 10px 0; }
+  .factor .row { grid-template-columns: 124px 1fr 64px; }
+  .factor .name { font-size: 14px; }
+  .factor .detail { font-size: 13px; }
+  .key { margin: -2px 72px 8px 132px; }
+  .hours { height: 96px; gap: 2px; }
+  .hour-axis { gap: 2px; }
+  .model { font-size: 13px; }
+  .leaflet-control-zoom { display: none; }                 /* pinch to zoom instead */
+  .legend { left: 8px; right: auto; bottom: 8px; padding: 5px 8px; font-size: 9px; display: flex; gap: 10px; }
+  .legend span { display: none; }
+  .legend div { margin-top: 0; gap: 4px; }
+  .legend i { width: 7px; height: 7px; }
+  .tag { font-size: 10px; top: -42px; }
+  .apt-label { font-size: 9px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -215,7 +243,7 @@ select:focus, input:focus { box-shadow: 0 0 0 2px var(--yellow); }
         <div><label for="date">Date</label><input id="date" type="date"></div>
         <div><label for="time">Departs (local)</label><input id="time" type="time" value="17:30"></div>
       </div>
-      <div class="hint">Or click an airport on the map to set the origin, then another for the destination.</div>
+      <div class="hint">Or pick airports on the map: first the origin, then the destination.</div>
     </section>
 
     <section id="card" hidden>
@@ -254,7 +282,7 @@ select:focus, input:focus { box-shadow: 0 0 0 2px var(--yellow); }
   <div class="mapwrap">
     <div id="map"></div>
     <div class="legend">
-      AIRPORT DELAY RATE
+      <span>AIRPORT DELAY RATE</span>
       <div><i style="background:var(--green)"></i>under 15%</div>
       <div><i style="background:var(--yellow)"></i>15 to 25%</div>
       <div><i style="background:var(--orange)"></i>25 to 35%</div>
@@ -340,7 +368,7 @@ function initMap() {
     }).addTo(map);
     m.bindTooltip(`<b>${code}</b> ${a.city}<br>${a.dep_rate == null ? 'no departures' : pct(a.dep_rate) + ' of departures arrive late'}`,
       { className: 'apt-tip', direction: 'top', offset: [0, -4] });
-    if (i < 28) L.tooltip({ permanent: true, direction: 'right', offset: [6, 0], className: 'apt-label' })
+    if (i < (innerWidth < 820 ? 12 : 28)) L.tooltip({ permanent: true, direction: 'right', offset: [6, 0], className: 'apt-label' })
       .setLatLng([a.lat, a.lon]).setContent(code).addTo(map);
     m.on('click', () => pick(code));
   });
@@ -446,7 +474,7 @@ function render(q, res) {
       `<button class="${h.hour === cur ? 'on' : ''}" data-h="${h.hour}" title="${String(h.hour).padStart(2, '0')}:00 · ${pct(h.risk)}" aria-label="${h.hour}:00, ${pct(h.risk)} risk">
         <i style="height:${h.risk / hmax * 100}%;background:${riskColor(h.risk, skin)}"></i></button>`).join('')}</div>
     <div class="hour-axis">${res.hourly.map(h => `<span>${h.hour % 3 === 2 ? String(h.hour).padStart(2, '0') : ''}</span>`).join('')}</div>
-    <div class="best">Lowest at <b>${String(best.hour).padStart(2, '0')}:00 (${pct(best.risk)})</b>, highest at <b>${String(worst.hour).padStart(2, '0')}:00 (${pct(worst.risk)})</b>. Click a bar to move the departure.</div>`;
+    <div class="best">Lowest at <b>${String(best.hour).padStart(2, '0')}:00 (${pct(best.risk)})</b>, highest at <b>${String(worst.hour).padStart(2, '0')}:00 (${pct(worst.risk)})</b>. Select a bar to move the departure.</div>`;
   $('hourly').querySelectorAll('button').forEach(b => b.onclick = () => {
     $('time').value = String(b.dataset.h).padStart(2, '0') + ':' + q.time.slice(3, 5); predict();
   });
