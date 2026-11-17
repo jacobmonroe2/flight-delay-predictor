@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DelayRadar</title>
+<link rel="stylesheet" href="/vendor/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Open+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080c11; --panel: #0f151c; --panel-2: #151d26; --line: #223040;
+  --text: #dbe4ee; --muted: #8493a3; --dim: #56657a;
+  --yellow: #ffd21f; --green: #3ddc84; --orange: #ff9a3d; --red: #ff5a5f; --cyan: #58c7f3;
+  --mono: "JetBrains Mono", Consolas, "SF Mono", monospace;
+  --sans: "Open Sans", "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px;
+  display: flex; flex-direction: column; overflow: hidden; }
+
+/* ---------- top bar ---------- */
+header { height: 46px; flex: none; display: flex; align-items: center; gap: 18px; padding: 0 16px;
+  background: var(--panel); border-bottom: 1px solid var(--line); }
+.logo { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: .02em; font-size: 16px; }
+.logo svg { width: 22px; height: 22px; }
+.logo span b { color: var(--yellow); font-weight: 700; }
+.status { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .04em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+  margin-right: 7px; box-shadow: 0 0 8px var(--green); }
+.clock { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--green); white-space: nowrap; }
+
+/* ---------- layout ---------- */
+main { flex: 1; display: flex; min-height: 0; }
+aside { width: 408px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
+  overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#map { flex: 1; background: var(--bg); min-width: 0; }
+section { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+h2 { margin: 0 0 10px; font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); }
+
+/* ---------- form ---------- */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid .wide { grid-column: 1 / -1; }
+label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 4px; }
+select, input { width: 100%; height: 36px; padding: 0 9px; background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 4px; font: 500 13px var(--mono); color-scheme: dark; }
+select:focus, input:focus { outline: none; border-color: var(--yellow); }
+.swap { position: relative; }
+.hint { margin-top: 10px; font-size: 12px; color: var(--dim); }
+
+/* ---------- flight card ---------- */
+.card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.apt { min-width: 0; }
+.apt .code { font: 700 30px/1 var(--mono); letter-spacing: .02em; }
+.apt .city { margin-top: 4px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 130px; }
+.apt .time { margin-top: 2px; font: 500 12px var(--mono); color: var(--text); }
+.apt.right { text-align: right; }
+.track { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 70px; }
+.track .path { width: 100%; display: flex; align-items: center; gap: 6px; color: var(--yellow); }
+.track .path::before, .track .path::after { content: ""; flex: 1; border-top: 1px dashed var(--dim); }
+.track .path svg { width: 20px; height: 20px; transform: rotate(90deg); }
+.track small { font: 400 11px var(--mono); color: var(--muted); }
+.carrier { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.carrier b { color: var(--text); font-weight: 600; }
+.warn { color: var(--orange); }
+
+/* ---------- risk ---------- */
+.risk { display: flex; align-items: flex-end; gap: 14px; }
+.risk .num { font: 700 58px/0.9 var(--mono); letter-spacing: -.03em; }
+.risk .num sup { font-size: 24px; margin-left: 2px; }
+.risk .band { font: 700 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+.risk .what { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.scale { position: relative; height: 8px; margin: 18px 0 22px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--green) 0 25%, var(--yellow) 25% 41.67%, var(--orange) 41.67% 58.33%, var(--red) 58.33% 100%);
+  opacity: .9; }
+.scale .pin { position: absolute; top: -5px; width: 3px; height: 18px; background: #fff; border-radius: 1px;
+  transform: translateX(-50%); box-shadow: 0 0 0 2px var(--panel); transition: left .35s ease; }
+.scale .avg { position: absolute; top: 11px; transform: translateX(-50%); font: 400 9.5px var(--mono);
+  color: var(--muted); white-space: nowrap; }
+.scale .avg::before { content: ""; position: absolute; left: 50%; top: -13px; height: 12px; border-left: 1px dashed var(--text); }
+.compare { font-size: 12.5px; color: var(--muted); }
+.compare b { color: var(--text); font-weight: 600; }
+
+/* ---------- factors ---------- */
+.factor { padding: 8px 0; border-top: 1px solid rgba(34,48,64,.6); }
+.factor:first-of-type { border-top: 0; padding-top: 0; }
+.factor .row { display: grid; grid-template-columns: 138px 1fr 62px; align-items: center; gap: 8px; }
+.factor .name { font-weight: 600; font-size: 13px; }
+.factor .pts { font: 500 12px var(--mono); text-align: right; white-space: nowrap; }
+.factor .bar { position: relative; height: 8px; background: var(--panel-2); border-radius: 2px; }
+.factor .bar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: 1px solid var(--dim); }
+.factor .bar i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.factor .detail { margin-top: 4px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.up { color: var(--red); } .down { color: var(--green); } .flat { color: var(--muted); }
+.key { display: flex; justify-content: space-between; font: 400 10px var(--mono); color: var(--dim);
+  margin: -2px 70px 8px 146px; }
+
+/* ---------- hourly ---------- */
+.hours { display: grid; grid-template-columns: repeat(19, 1fr); gap: 3px; align-items: end; height: 84px; }
+.hours button { all: unset; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end;
+  height: 100%; position: relative; }
+.hours button i { display: block; border-radius: 2px 2px 0 0; opacity: .55; transition: height .3s ease; }
+.hours button:hover i, .hours button.on i { opacity: 1; }
+.hours button.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -5px; height: 2px; background: #fff; }
+.hours button:focus-visible { outline: 1px solid var(--yellow); }
+.hour-axis { display: grid; grid-template-columns: repeat(19, 1fr); gap: 3px; margin-top: 8px;
+  font: 400 9.5px var(--mono); color: var(--dim); text-align: center; }
+.best { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.best b { color: var(--text); }
+
+/* ---------- model ---------- */
+.model { font-size: 12px; line-height: 1.55; color: var(--muted); }
+.model table { width: 100%; border-collapse: collapse; margin: 8px 0; font-family: var(--mono); font-size: 11.5px; }
+.model td, .model th { padding: 4px 0; border-bottom: 1px solid rgba(34,48,64,.6); text-align: right; font-weight: 400; }
+.model td:first-child, .model th:first-child { text-align: left; }
+.model th { color: var(--dim); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.model tr.us td { color: var(--yellow); }
+.empty { color: var(--dim); font-size: 13px; padding: 6px 0; }
+.error { color: var(--red); font-size: 13px; }
+
+/* ---------- panel skin: Flighty-style colors and type. The map keeps the radar look. ---------- */
+header, aside {
+  --panel: #000; --panel-2: #2c2c2e; --card: #1c1c1e; --line: #2c2c2e;
+  --text: #fff; --muted: #aeaeb2; --dim: #8e8e93;
+  --yellow: #ffd60a; --green: #30d158; --orange: #ff9f0a; --red: #ff453a;
+  --mono: var(--sans);
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+header { border-bottom-color: #1c1c1e; }
+.status { font-size: 12px; font-weight: 600; letter-spacing: 0; }
+.status i { box-shadow: none; }
+.clock { font-weight: 700; color: var(--text); }
+aside { padding: 10px; border-right-color: #1c1c1e; }
+section { background: var(--card); border: 0; border-radius: 16px; padding: 16px; margin-bottom: 10px; }
+h2 { font-size: 12px; font-weight: 700; letter-spacing: .04em; margin-bottom: 12px; }
+label { font-size: 11px; font-weight: 600; letter-spacing: .03em; color: var(--dim); margin-bottom: 5px; }
+select, input { height: 40px; padding: 0 11px; border: 0; border-radius: 10px; font: 600 14px var(--sans); }
+select:focus, input:focus { box-shadow: 0 0 0 2px var(--yellow); }
+.apt .code { font: 800 34px/1 var(--sans); letter-spacing: -.02em; }
+.apt .time { font: 700 13px var(--sans); }
+.track small { font: 600 11px var(--sans); }
+.risk .num { font: 800 64px/0.9 var(--sans); letter-spacing: -.04em; }
+.risk .band { font: 800 13px var(--sans); letter-spacing: .04em; }
+.scale { border-radius: 4px; opacity: 1; }
+.scale .avg { font: 600 10px var(--sans); }
+.factor { border-top-color: #2c2c2e; }
+.factor .pts { font: 700 12.5px var(--sans); }
+.factor .bar, .factor .bar i { border-radius: 4px; }
+.key { font: 600 10px var(--sans); }
+.hours button i { border-radius: 3px 3px 0 0; }
+.hour-axis { font: 600 10px var(--sans); }
+.model table { font-family: var(--sans); font-size: 12.5px; }
+.model td, .model th { border-bottom-color: #2c2c2e; }
+.model th { font-weight: 700; letter-spacing: .03em; }
+.model tr.us td { font-weight: 700; }
+
+/* ---------- map ---------- */
+.leaflet-container { background: var(--bg); font-family: var(--mono); }
+.leaflet-control-attribution { display: none; }
+.leaflet-bar a { background: var(--panel); color: var(--text); border-color: var(--line) !important; }
+.leaflet-bar a:hover { background: var(--panel-2); color: var(--yellow); }
+.apt-label { background: none; border: 0; box-shadow: none; color: var(--muted); font: 500 10px var(--mono);
+  padding: 0; letter-spacing: .04em; }
+.apt-label::before { display: none; }
+.apt-tip { background: var(--panel); border: 1px solid var(--line); color: var(--text); font: 400 11px/1.5 var(--mono);
+  border-radius: 3px; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+.apt-tip::before { display: none; }
+.plane { position: relative; width: 0; height: 0; }
+.plane svg { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px;
+  filter: drop-shadow(0 0 6px rgba(255,210,31,.55)); }
+.tag { position: absolute; left: 26px; top: -46px; padding: 3px 6px; white-space: nowrap;
+  font: 500 11px/1.35 var(--mono); color: var(--green); background: rgba(8,12,17,.82);
+  border-left: 2px solid var(--green); letter-spacing: .03em; }
+.tag::before { content: ""; position: absolute; left: -20px; top: 100%; width: 22px; border-top: 1px solid var(--green);
+  transform: rotate(-38deg); transform-origin: right top; opacity: .7; }
+.legend { position: absolute; right: 12px; bottom: 26px; z-index: 500; padding: 9px 11px; background: rgba(15,21,28,.9);
+  border: 1px solid var(--line); border-radius: 4px; font: 400 10px var(--mono); color: var(--muted); letter-spacing: .04em; }
+.legend div { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+.legend i { width: 9px; height: 9px; border-radius: 50%; }
+.mapwrap { position: relative; flex: 1; display: flex; min-width: 0; }
+
+@media (max-width: 820px) {
+  body { overflow: auto; }
+  main { flex-direction: column-reverse; }
+  aside { width: 100%; border-right: 0; overflow: visible; }
+  .mapwrap { flex: none; height: 44vh; }
+  .status { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#ffd21f" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="5.5" opacity=".55"/><path d="M12 12 19 5" stroke-linecap="round"/><circle cx="12" cy="12" r="1.4" fill="#ffd21f" stroke="none"/></svg>
+    <span>Delay<b>Radar</b></span>
+  </div>
+  <div class="status" id="status"><i></i>LOADING MODEL</div>
+  <div class="clock" id="clock"></div>
+</header>
+
+<main>
+  <aside>
+    <section>
+      <h2>Flight</h2>
+      <div class="grid">
+        <div><label for="origin">From</label><select id="origin"></select></div>
+        <div><label for="dest">To</label><select id="dest"></select></div>
+        <div class="wide"><label for="airline">Airline</label><select id="airline"></select></div>
+        <div><label for="date">Date</label><input id="date" type="date"></div>
+        <div><label for="time">Departs (local)</label><input id="time" type="time" value="17:30"></div>
+      </div>
+      <div class="hint">Or click an airport on the map to set the origin, then another for the destination.</div>
+    </section>
+
+    <section id="card" hidden>
+      <div class="card-top">
+        <div class="apt"><div class="code" id="c-o"></div><div class="city" id="c-oc"></div><div class="time" id="c-ot"></div></div>
+        <div class="track">
+          <div class="path"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.7 0 1.2.8 1.2 2v5l8 5v2l-8-2.5V19l2.3 1.7V22L12 21l-3.5 1v-1.3L10.8 19v-5.5l-8 2.5v-2l8-5V4c0-1.2.5-2 1.2-2z"/></svg></div>
+          <small id="c-dist"></small>
+        </div>
+        <div class="apt right"><div class="code" id="c-d"></div><div class="city" id="c-dc" style="margin-left:auto"></div><div class="time" id="c-dt"></div></div>
+      </div>
+      <div class="carrier" id="c-air"></div>
+    </section>
+
+    <section>
+      <h2>Delay risk</h2>
+      <div id="risk-body"><div class="empty">Pick a flight to get a risk score.</div></div>
+    </section>
+
+    <section>
+      <h2>What is driving it</h2>
+      <div id="factors"><div class="empty">The factors behind the score appear here.</div></div>
+    </section>
+
+    <section>
+      <h2>Risk by departure hour</h2>
+      <div id="hourly"><div class="empty">Same flight and day, at each hour.</div></div>
+    </section>
+
+    <section>
+      <h2>Model</h2>
+      <div class="model" id="model"></div>
+    </section>
+  </aside>
+
+  <div class="mapwrap">
+    <div id="map"></div>
+    <div class="legend">
+      AIRPORT DELAY RATE
+      <div><i style="background:var(--green)"></i>under 15%</div>
+      <div><i style="background:var(--yellow)"></i>15 to 25%</div>
+      <div><i style="background:var(--orange)"></i>25 to 35%</div>
+      <div><i style="background:var(--red)"></i>35% and up</div>
+    </div>
+  </div>
+</main>
+
+<script src="/vendor/leaflet.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const PLANE = '<svg viewBox="0 0 24 24" fill="#ffd21f"><path d="M12 2c.7 0 1.2.8 1.2 2v5l8 5v2l-8-2.5V19l2.3 1.7V22L12 21l-3.5 1v-1.3L10.8 19v-5.5l-8 2.5v-2l8-5V4c0-1.2.5-2 1.2-2z"/></svg>';
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const skin = n => getComputedStyle(document.querySelector('aside')).getPropertyValue(n).trim();   // panel palette
+const riskColor = (p, v = css) => p < .15 ? v('--green') : p < .25 ? v('--yellow') : p < .35 ? v('--orange') : v('--red');
+const pct = (p, d = 0) => (p * 100).toFixed(d) + '%';
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let META, map, layers = {}, anim, pickStage = 0;
+
+/* ---------- clock ---------- */
+setInterval(tick, 1000); tick();
+function tick() { $('clock').textContent = new Date().toISOString().slice(11, 19) + ' UTC'; }
+
+/* ---------- boot ---------- */
+fetch('/api/meta').then(r => r.json()).then(m => {
+  META = m;
+  $('status').innerHTML = `<i></i>MODEL ONLINE · ${m.n_flights.toLocaleString()} FLIGHTS · BTS ON-TIME PERFORMANCE ${m.date_min.slice(0,7)} TO ${m.date_max.slice(0,7)}`;
+  initForm(); initMap(); renderModel(); predict();
+}).catch(() => { $('status').textContent = 'MODEL OFFLINE'; });
+
+/* ---------- form ---------- */
+function initForm() {
+  const codes = Object.keys(META.airports).sort();
+  $('origin').innerHTML = codes.filter(c => destsOf(c).length)
+    .map(c => `<option value="${c}">${c} · ${META.airports[c].city}</option>`).join('');
+  const t = new Date(Date.now() + 864e5);
+  $('date').value = new Date(t - t.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  $('origin').value = META.airports.ORD ? 'ORD' : codes[0];
+  fillDests('LGA'); fillAirlines('UA');
+  $('origin').onchange = () => { fillDests($('dest').value); fillAirlines($('airline').value); predict(); };
+  $('dest').onchange = () => { fillAirlines($('airline').value); predict(); };
+  for (const id of ['airline', 'date', 'time']) $(id).onchange = predict;
+}
+function destsOf(o) {
+  return Object.keys(META.routes).filter(k => k.startsWith(o + '-')).map(k => k.slice(4))
+    .filter(d => META.airports[d]).sort();
+}
+function fillDests(keep) {
+  const ds = destsOf($('origin').value);
+  $('dest').innerHTML = ds.map(c => `<option value="${c}">${c} · ${META.airports[c].city}</option>`).join('');
+  if (ds.includes(keep)) $('dest').value = keep;
+}
+function fillAirlines(keep) {
+  const r = META.routes[$('origin').value + '-' + $('dest').value];
+  const as = r ? r.airlines : [];
+  $('airline').innerHTML = as.map(a => `<option value="${a}">${a} · ${META.airlines[a].name}</option>`).join('');
+  if (as.includes(keep)) $('airline').value = keep;
+}
+
+/* ---------- map ---------- */
+function initMap() {
+  map = L.map('map', { zoomControl: true, worldCopyJump: true, minZoom: 3, maxZoom: 9 }).setView([38.5, -96], 4.4);
+  map.options.zoomSnap = 0.1;
+  // Basemap: state outlines and a lat/lon grid drawn locally, no tile server.
+  layers.base = L.layerGroup().addTo(map);
+  for (let lat = 10; lat <= 70; lat += 10)
+    L.polyline([[lat, -180], [lat, -40]], { color: '#16202b', weight: .6, interactive: false }).addTo(layers.base);
+  for (let lon = -180; lon <= -40; lon += 10)
+    L.polyline([[5, lon], [75, lon]], { color: '#16202b', weight: .6, interactive: false }).addTo(layers.base);
+  fetch('/vendor/us-states.json').then(r => r.json()).then(g =>
+    L.geoJSON(g, { interactive: false, style: { color: '#33475c', weight: .8, fillColor: '#0d141b', fillOpacity: 1 } })
+      .addTo(layers.base).bringToBack());
+  layers.spokes = L.layerGroup().addTo(map);
+  layers.route = L.layerGroup().addTo(map);
+  const apts = Object.entries(META.airports).sort((a, b) => b[1].flights - a[1].flights);
+  const max = apts[0][1].flights;
+  apts.forEach(([code, a], i) => {
+    const m = L.circleMarker([a.lat, a.lon], {
+      radius: 2.2 + 6 * Math.sqrt(a.flights / max), weight: 1, color: '#080c11',
+      fillColor: riskColor(a.dep_rate ?? 0), fillOpacity: .85
+    }).addTo(map);
+    m.bindTooltip(`<b>${code}</b> ${a.city}<br>${a.dep_rate == null ? 'no departures' : pct(a.dep_rate) + ' of departures arrive late'}`,
+      { className: 'apt-tip', direction: 'top', offset: [0, -4] });
+    if (i < 28) L.tooltip({ permanent: true, direction: 'right', offset: [6, 0], className: 'apt-label' })
+      .setLatLng([a.lat, a.lon]).setContent(code).addTo(map);
+    m.on('click', () => pick(code));
+  });
+}
+function pick(code) {
+  const hasOrigin = [...$('origin').options].some(o => o.value === code);
+  if (pickStage === 1 && destsOf($('origin').value).includes(code)) {
+    $('dest').value = code; pickStage = 0;
+  } else if (hasOrigin) {
+    $('origin').value = code; fillDests($('dest').value); pickStage = 1;
+  } else return;
+  fillAirlines($('airline').value); predict();
+}
+function greatCircle(a, b, n = 72) {
+  const R = Math.PI / 180, [p1, l1, p2, l2] = [a.lat * R, a.lon * R, b.lat * R, b.lon * R];
+  const d = 2 * Math.asin(Math.sqrt(Math.sin((p2 - p1) / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin((l2 - l1) / 2) ** 2));
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const f = i / n, A = Math.sin((1 - f) * d) / Math.sin(d), B = Math.sin(f * d) / Math.sin(d);
+    const x = A * Math.cos(p1) * Math.cos(l1) + B * Math.cos(p2) * Math.cos(l2);
+    const y = A * Math.cos(p1) * Math.sin(l1) + B * Math.cos(p2) * Math.sin(l2);
+    const z = A * Math.sin(p1) + B * Math.sin(p2);
+    pts.push([Math.atan2(z, Math.hypot(x, y)) / R, Math.atan2(y, x) / R]);
+  }
+  return pts;
+}
+function drawRoute(o, d, airline, res) {
+  cancelAnimationFrame(anim);
+  layers.route.clearLayers(); layers.spokes.clearLayers();
+  const A = META.airports[o], B = META.airports[d], color = riskColor(res.risk);
+  for (const x of destsOf(o)) if (x !== d)
+    L.polyline(greatCircle(A, META.airports[x], 24), { color: css('--cyan'), weight: .6, opacity: .16, interactive: false }).addTo(layers.spokes);
+  for (const nm of [250, 500, 1000])
+    L.circle([A.lat, A.lon], { radius: nm * 1852, color: css('--green'), weight: .7, opacity: .22, fill: false, dashArray: '3 7', interactive: false }).addTo(layers.spokes);
+  const pts = greatCircle(A, B);
+  L.polyline(pts, { color, weight: 7, opacity: .16, interactive: false }).addTo(layers.route);
+  L.polyline(pts, { color, weight: 2.2, opacity: .95, interactive: false }).addTo(layers.route);
+  for (const [P, c] of [[A, o], [B, d]])
+    L.circleMarker([P.lat, P.lon], { radius: 6, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 1, interactive: false }).addTo(layers.route);
+  const icon = L.divIcon({ className: '', iconSize: [0, 0],
+    html: `<div class="plane"><div class="rot">${PLANE}</div><div class="tag" style="color:${color};border-color:${color}">${airline} ${o}-${d}<br>RISK ${Math.round(res.risk * 100)} ${res.band.toUpperCase().slice(0, 4)}</div></div>` });
+  const plane = L.marker(pts[0], { icon, interactive: false, zIndexOffset: 1000 }).addTo(layers.route);
+  map.flyToBounds(L.latLngBounds(pts).pad(.35), { duration: reduced ? 0 : .8, maxZoom: 6.5 });
+
+  const place = f => {
+    f = Number.isFinite(f) ? Math.min(1, Math.max(0, f)) : 0;
+    const i = Math.min(pts.length - 2, Math.floor(f * (pts.length - 1)));
+    const t = f * (pts.length - 1) - i;
+    const ll = [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t];
+    plane.setLatLng(ll);
+    const p1 = map.latLngToLayerPoint(pts[i]), p2 = map.latLngToLayerPoint(pts[i + 1]);
+    const el = plane.getElement()?.querySelector('.rot svg');
+    if (el) el.style.transform = `rotate(${Math.atan2(p2.x - p1.x, -(p2.y - p1.y)) * 180 / Math.PI}deg)`;
+  };
+  if (reduced) { place(.5); return; }
+  const t0 = performance.now(), dur = 14000;
+  (function step(now) { place((Math.max(0, now - t0) % dur) / dur); anim = requestAnimationFrame(step); })(t0);
+}
+
+/* ---------- predict ---------- */
+let seq = 0;
+async function predict() {
+  const q = { airline: $('airline').value, origin: $('origin').value, dest: $('dest').value, date: $('date').value, time: $('time').value };
+  if (!q.airline || !q.dest || !q.date || !q.time) return;
+  const mine = ++seq;
+  const r = await fetch('/api/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(q) });
+  const res = await r.json();
+  if (mine !== seq) return;
+  if (!r.ok) { $('risk-body').innerHTML = `<div class="error">${res.error}</div>`; return; }
+  render(q, res);
+}
+function render(q, res) {
+  const o = META.airports[q.origin], d = META.airports[q.dest], color = riskColor(res.risk, skin);
+  $('card').hidden = false;
+  $('c-o').textContent = q.origin; $('c-d').textContent = q.dest;
+  $('c-oc').textContent = o.city; $('c-dc').textContent = d.city;
+  $('c-ot').textContent = q.time; $('c-dt').textContent = res.arrival;
+  $('c-dist').textContent = res.distance.toLocaleString() + ' MI';
+  const day = new Date(q.date + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  $('c-air').innerHTML = `<b>${res.airline_name}</b> · ${day}`;
+
+  const pos = Math.min(100, res.risk / .6 * 100), avg = res.base_rate / .6 * 100;
+  const diff = (res.risk - res.base_rate) * 100;
+  $('risk-body').innerHTML = `
+    <div class="risk">
+      <div class="num" style="color:${color}">${Math.round(res.risk * 100)}<sup>%</sup></div>
+      <div><div class="band" style="color:${color}">${res.band} risk</div>
+      <div class="what">chance of arriving 15+ minutes late</div></div>
+    </div>
+    <div class="scale"><div class="pin" style="left:${pos}%"></div><div class="avg" style="left:${avg}%">AVG ${pct(res.base_rate)}</div></div>
+    <div class="compare">${Math.abs(diff) < 1 ? 'About the same as' : `<b>${Math.abs(diff).toFixed(0)} points ${diff > 0 ? 'above' : 'below'}</b>`} the average flight.
+      Riskier than <b>${res.percentile}%</b> of flights the model was tested on.</div>`;
+
+  const max = Math.max(2, ...res.factors.map(f => Math.abs(f.points)));
+  $('factors').innerHTML = `<div class="key"><span>◀ LOWERS</span><span>RAISES ▶</span></div>` + res.factors.map(f => {
+    const w = Math.abs(f.points) / max * 50, cls = Math.abs(f.points) < .05 ? 'flat' : f.points > 0 ? 'up' : 'down';
+    const bar = f.points > 0 ? `left:50%;width:${w}%;background:var(--red)` : `right:50%;width:${w}%;background:var(--green)`;
+    return `<div class="factor"><div class="row"><div class="name">${f.factor}</div>
+      <div class="bar"><i style="${bar}"></i></div>
+      <div class="pts ${cls}">${f.points > 0 ? '+' : ''}${f.points.toFixed(1)} pts</div></div>
+      <div class="detail">${f.detail}</div></div>`;
+  }).join('');
+
+  const hmax = Math.max(.3, ...res.hourly.map(h => h.risk)), cur = +q.time.slice(0, 2);
+  const best = res.hourly.reduce((a, b) => b.risk < a.risk ? b : a), worst = res.hourly.reduce((a, b) => b.risk > a.risk ? b : a);
+  $('hourly').innerHTML = `<div class="hours">${res.hourly.map(h =>
+      `<button class="${h.hour === cur ? 'on' : ''}" data-h="${h.hour}" title="${String(h.hour).padStart(2, '0')}:00 · ${pct(h.risk)}" aria-label="${h.hour}:00, ${pct(h.risk)} risk">
+        <i style="height:${h.risk / hmax * 100}%;background:${riskColor(h.risk, skin)}"></i></button>`).join('')}</div>
+    <div class="hour-axis">${res.hourly.map(h => `<span>${h.hour % 3 === 2 ? String(h.hour).padStart(2, '0') : ''}</span>`).join('')}</div>
+    <div class="best">Lowest at <b>${String(best.hour).padStart(2, '0')}:00 (${pct(best.risk)})</b>, highest at <b>${String(worst.hour).padStart(2, '0')}:00 (${pct(worst.risk)})</b>. Click a bar to move the departure.</div>`;
+  $('hourly').querySelectorAll('button').forEach(b => b.onclick = () => {
+    $('time').value = String(b.dataset.h).padStart(2, '0') + ':' + q.time.slice(3, 5); predict();
+  });
+  drawRoute(q.origin, q.dest, q.airline, res);
+}
+function renderModel() {
+  const rows = Object.entries(META.results).map(([n, r]) =>
+    `<tr class="${n.startsWith('Gradient') ? 'us' : ''}"><td>${n}</td><td>${r.auc.toFixed(3)}</td><td>${r.brier.toFixed(4)}</td></tr>`).join('');
+  $('model').innerHTML = `Scored on ${META.n_test.toLocaleString()} flights from days the model never saw.
+    <table><tr><th>Method</th><th>AUC</th><th>Brier</th></tr>${rows}</table>
+    The riskiest tenth of flights ran late ${pct(META.top_decile_rate)} of the time, the safest tenth ${pct(META.bottom_decile_rate)}.
+    The model knows the schedule only: no weather, no air traffic control programs, no late inbound aircraft.`;
+}
+</script>
+</body>
+</html>
