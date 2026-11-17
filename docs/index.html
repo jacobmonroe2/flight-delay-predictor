@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DelayRadar</title>
-<link rel="stylesheet" href="/vendor/leaflet.css">
+<link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Open+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -263,7 +263,8 @@ select:focus, input:focus { box-shadow: 0 0 0 2px var(--yellow); }
   </div>
 </main>
 
-<script src="/vendor/leaflet.js"></script>
+<script src="vendor/leaflet.js"></script>
+<script src="predictor.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const PLANE = '<svg viewBox="0 0 24 24" fill="#ffd21f"><path d="M12 2c.7 0 1.2.8 1.2 2v5l8 5v2l-8-2.5V19l2.3 1.7V22L12 21l-3.5 1v-1.3L10.8 19v-5.5l-8 2.5v-2l8-5V4c0-1.2.5-2 1.2-2z"/></svg>';
@@ -280,11 +281,11 @@ setInterval(tick, 1000); tick();
 function tick() { $('clock').textContent = new Date().toISOString().slice(11, 19) + ' UTC'; }
 
 /* ---------- boot ---------- */
-fetch('/api/meta').then(r => r.json()).then(m => {
+Predictor.load().then(m => {
   META = m;
   $('status').innerHTML = `<i></i>MODEL ONLINE · ${m.n_flights.toLocaleString()} FLIGHTS · BTS ON-TIME PERFORMANCE ${m.date_min.slice(0,7)} TO ${m.date_max.slice(0,7)}`;
   initForm(); initMap(); renderModel(); predict();
-}).catch(() => { $('status').textContent = 'MODEL OFFLINE'; });
+}).catch(e => { console.error(e); $('status').textContent = 'MODEL OFFLINE'; });
 
 /* ---------- form ---------- */
 function initForm() {
@@ -325,7 +326,7 @@ function initMap() {
     L.polyline([[lat, -180], [lat, -40]], { color: '#16202b', weight: .6, interactive: false }).addTo(layers.base);
   for (let lon = -180; lon <= -40; lon += 10)
     L.polyline([[5, lon], [75, lon]], { color: '#16202b', weight: .6, interactive: false }).addTo(layers.base);
-  fetch('/vendor/us-states.json').then(r => r.json()).then(g =>
+  fetch('vendor/us-states.json').then(r => r.json()).then(g =>
     L.geoJSON(g, { interactive: false, style: { color: '#33475c', weight: .8, fillColor: '#0d141b', fillOpacity: 1 } })
       .addTo(layers.base).bringToBack());
   layers.spokes = L.layerGroup().addTo(map);
@@ -400,15 +401,11 @@ function drawRoute(o, d, airline, res) {
 }
 
 /* ---------- predict ---------- */
-let seq = 0;
-async function predict() {
+function predict() {
   const q = { airline: $('airline').value, origin: $('origin').value, dest: $('dest').value, date: $('date').value, time: $('time').value };
   if (!q.airline || !q.dest || !q.date || !q.time) return;
-  const mine = ++seq;
-  const r = await fetch('/api/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(q) });
-  const res = await r.json();
-  if (mine !== seq) return;
-  if (!r.ok) { $('risk-body').innerHTML = `<div class="error">${res.error}</div>`; return; }
+  const res = Predictor.predict(q);          // the model runs here, in the browser
+  if (res.error) { $('risk-body').innerHTML = `<div class="error">${res.error}</div>`; return; }
   render(q, res);
 }
 function render(q, res) {

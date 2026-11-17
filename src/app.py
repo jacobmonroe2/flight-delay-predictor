@@ -1,4 +1,8 @@
-"""Flask app: serves the radar-style interface and the prediction API.
+"""Flask app: serves the site locally and offers the prediction as a Python API.
+
+The public site (GitHub Pages) is static and runs the model in the browser with
+docs/predictor.js. This server is for local use and for checking that the
+JavaScript predictor matches LightGBM: POST /api/predict returns the reference answer.
 
 Run:  python src/app.py   then open http://localhost:5000
 """
@@ -17,7 +21,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from features import FEATURES, GROUPS, GROUP_ORDER, build_features
 
 ROOT = Path(__file__).resolve().parent.parent
-WEB = ROOT / "web"
+WEB = ROOT / "docs"
 META = json.loads((ROOT / "models" / "meta.json").read_text())
 MODEL = lgb.Booster(model_file=str(ROOT / "models" / "model.txt"))
 
@@ -108,9 +112,9 @@ def index():
     return send_from_directory(WEB, "index.html")
 
 
-@app.get("/vendor/<path:name>")
-def vendor(name):
-    return send_from_directory(WEB / "vendor", name)
+@app.get("/<path:name>")
+def static_file(name):
+    return send_from_directory(WEB, name)
 
 
 @app.get("/api/meta")

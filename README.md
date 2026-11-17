@@ -7,6 +7,8 @@ The model is trained on the Bureau of Transportation Statistics
 [Reporting Carrier On-Time Performance](https://www.transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FGJ)
 data: 6,895,984 US domestic flights from September 2025 through August 2026.
 
+**Live site: https://jacobmonroe2.github.io/flight-delay-predictor/**
+
 ![DelayRadar screenshot](docs/screenshot.png)
 
 ## Run it
@@ -17,8 +19,14 @@ python -m venv .venv
 .venv/Scripts/python src/app.py
 ```
 
-Then open http://localhost:5000. The trained model ships in `models/`, so the
-app runs without downloading any data.
+Then open http://localhost:5000. The trained model ships with the repository, so
+the app runs without downloading any data.
+
+The public site is hosted on GitHub Pages from the `docs/` folder. Pages serves
+static files only, so the page runs the model itself: `docs/predictor.js`
+evaluates the decision trees and computes the explanations in the browser. The
+Flask server is only needed locally, where its `/api/predict` endpoint gives
+the LightGBM reference answer.
 
 ## Rebuild the model from scratch
 
@@ -26,6 +34,7 @@ app runs without downloading any data.
 .venv/Scripts/python src/download_data.py   # 12 monthly zip files from BTS (about 350 MB)
 .venv/Scripts/python src/prepare.py         # clean and combine into data/flights.parquet
 .venv/Scripts/python src/train.py           # train, evaluate, write models/
+.venv/Scripts/python src/export_web.py      # export the model for the web page
 ```
 
 Training takes about one minute on a laptop.
@@ -38,8 +47,10 @@ Training takes about one minute on a laptop.
 | `src/prepare.py` | Keeps 21 of 109 columns, drops cancelled and diverted flights. |
 | `src/features.py` | Builds the 12 model inputs. Shared by training and the app. |
 | `src/train.py` | Trains the model, scores it against three baselines, saves everything. |
-| `src/app.py` | Flask server: the prediction API and the web page. |
-| `web/index.html` | The radar-style interface. |
+| `src/export_web.py` | Writes the trees and lookups as JSON for the browser. |
+| `src/app.py` | Local Flask server and reference prediction API. |
+| `docs/index.html` | The radar-style interface. |
+| `docs/predictor.js` | Runs the model and the SHAP explanations in the browser. |
 
 **Target.** A flight counts as delayed if it arrives 15 or more minutes late,
 the Department of Transportation definition.
